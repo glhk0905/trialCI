@@ -8,13 +8,16 @@
 <style>
 body{font-family:Arial;background:#000;color:#fff;margin:0;text-align:center}
 header{background:#111;padding:18px;font-size:26px;font-weight:bold}
-input,button{width:92%;max-width:420px;padding:18px;margin:12px auto;
-font-size:24px;border-radius:12px;border:none}
+input,button{width:92%;max-width:420px;padding:20px;margin:12px auto;
+font-size:26px;border-radius:12px;border:none}
 .event-btn{background:#1E88E5;color:#fff}
 .first-btn{background:#43A047;color:#fff}
 .back-btn{background:#555;color:#fff}
-.manual-btn{background:#F9A825;color:#000}
-.confirm{color:#4CAF50;font-size:36px}
+#scanner{max-width:520px;margin:auto}
+#status{font-size:40px;font-weight:bold;margin-top:40px}
+.member{font-size:30px;margin-top:10px}
+.success{color:#4CAF50}
+.error{color:#FF5252}
 .hidden{display:none}
 .small{font-size:16px;opacity:.6}
 </style>
@@ -28,9 +31,10 @@ font-size:24px;border-radius:12px;border:none}
 <div id="staffPage">
   <input id="staffInput" placeholder="輸入工作人員名稱">
   <button class="event-btn" onclick="saveStaff()">開始</button>
+  <div id="deviceInfo" class="small"></div>
 </div>
 
-<!-- 項目 -->
+<!-- 七個簽到項目 -->
 <div id="eventPage" class="hidden">
   <button class="first-btn" onclick="selectEvent('首次報到')">① 首次報到</button>
   <button class="event-btn" onclick="selectEvent('項目一')">② 項目一</button>
@@ -41,25 +45,12 @@ font-size:24px;border-radius:12px;border:none}
   <button class="event-btn" onclick="selectEvent('項目六')">⑦ 項目六</button>
 </div>
 
-<!-- 掃描 -->
-<div id="scanPage" class="hidden">
-  <div id="scanner"></div>
-  <button class="manual-btn" onclick="openManual()">✍️ 手動輸入</button>
-  <button class="back-btn" onclick="backToEvent()">⬅ 返回</button>
+<div id="backArea" class="hidden">
+  <button class="back-btn" onclick="back()">⬅ 返回選擇</button>
 </div>
 
-<!-- 手動輸入 -->
-<div id="manualPage" class="hidden">
-  <input id="teamNo" placeholder="隊號（01-27）" maxlength="2">
-  <input id="memberNo" placeholder="隊員（A-I）" maxlength="1">
-  <button class="event-btn" onclick="submitManual()">提交</button>
-  <button class="back-btn" onclick="backToScan()">⬅ 返回相機</button>
-</div>
-
-<!-- 確認 -->
-<div id="confirmPage" class="hidden">
-  <div class="confirm">✅ 已提交</div>
-</div>
+<div id="scanner" class="hidden"></div>
+<div id="status" class="hidden"></div>
 
 <script src="https://unpkg.com/html5-qrcode"></script>
 <script>
@@ -71,27 +62,62 @@ const ENTRY_STAFF="entry.1290533017";
 const ENTRY_DEVICE="entry.389796138";
 // =======================
 
-let staff="",eventName="",qr;
-let device="DEV-"+Math.random().toString(36).substr(2,6).toUpperCase();
+let staff=localStorage.getItem("staff")||"";
+let device=localStorage.getItem("device")||"";
+let eventName="",qr;
 
-function show(id){
- document.querySelectorAll("div").forEach(d=>d.classList.add("hidden"));
- document.getElementById(id).classList.remove("hidden");
+const header=document.getElementById("header");
+const staffPage=document.getElementById("staffPage");
+const eventPage=document.getElementById("eventPage");
+const scanner=document.getElementById("scanner");
+const statusBox=document.getElementById("status");
+const deviceInfo=document.getElementById("deviceInfo");
+const backArea=document.getElementById("backArea");
+
+// 裝置 ID
+if(!device){
+ device="DEV-"+Math.random().toString(36).substr(2,6).toUpperCase();
+ localStorage.setItem("device",device);
+}
+deviceInfo.innerText="裝置 ID："+device;
+
+// 已登入
+if(staff){
+ staffPage.classList.add("hidden");
+ eventPage.classList.remove("hidden");
+ header.innerText="📋 選擇簽到項目";
 }
 
 function saveStaff(){
- staff=staffInput.value.trim();
- if(!staff)return alert("請輸入名稱");
- header.innerText="📋 選擇項目";
- show("eventPage");
+ const v=document.getElementById("staffInput").value.trim();
+ if(!v)return alert("請輸入名稱");
+ staff=v;localStorage.setItem("staff",v);
+ staffPage.classList.add("hidden");
+ eventPage.classList.remove("hidden");
+ header.innerText="📋 選擇簽到項目";
 }
 
 function selectEvent(e){
  eventName=e;
- header.innerText="📷 掃描 QR";
- show("scanPage");
+ header.innerText="📷 掃描 QR｜"+e;
+ eventPage.classList.add("hidden");
+ backArea.classList.remove("hidden");
+ scanner.classList.remove("hidden");
  qr=new Html5Qrcode("scanner");
- qr.start({facingMode:"environment"},{fps:10,qrbox:250},id=>submit(id));
+ qr.start({facingMode:"environment"},{fps:10,qrbox:280},scan);
+}
+
+function back(){
+ if(qr)qr.stop().catch(()=>{});
+ scanner.classList.add("hidden");
+ backArea.classList.add("hidden");
+ eventPage.classList.remove("hidden");
+ header.innerText="📋 選擇簽到項目";
+}
+
+function scan(id){
+ qr.pause();
+ submit(id);
 }
 
 function submit(id){
@@ -100,30 +126,27 @@ function submit(id){
  d.append(ENTRY_EVENT,eventName);
  d.append(ENTRY_STAFF,staff);
  d.append(ENTRY_DEVICE,device);
- fetch(FORM_URL,{method:"POST",mode:"no-cors",body:d});
+
+ fetch(FORM_URL,{method:"POST",mode:"no-cors",body:d})
+  .then(()=>show(true,id))
+  .catch(()=>show(false,id));
 }
 
-function openManual(){
- qr.stop();
- show("manualPage");
-}
+function show(ok,id){
+ scanner.classList.add("hidden");
+ if(navigator.vibrate){
+   ok?navigator.vibrate([80,60,80]):navigator.vibrate(300);
+ }
+ statusBox.className=ok?"success":"error";
+ statusBox.innerHTML=`${ok?"✅ 簽到成功":"❌ 簽到失敗"}
+ <div class="member">${eventName}<br>成員 ID：${id}</div>`;
+ statusBox.classList.remove("hidden");
 
-function submitManual(){
- let team=teamNo.value.padStart(2,"0");
- let mem=memberNo.value.toUpperCase();
- if(team<"01"||team>"27")return alert("隊號錯誤");
- if(!/[A-I]/.test(mem))return alert("隊員錯誤");
- submit(team+mem);
- show("confirmPage");
- setTimeout(()=>show("manualPage"),500);
-}
-
-function backToScan(){
- show("scanPage");
-}
-
-function backToEvent(){
- show("eventPage");
+ setTimeout(()=>{
+  statusBox.classList.add("hidden");
+  scanner.classList.remove("hidden");
+  qr.resume();
+ },ok?500:1000);
 }
 </script>
 </body>

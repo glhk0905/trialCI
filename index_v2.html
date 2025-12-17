@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>比賽簽到系統</title>
+
+<style>
+body{
+  font-family:Arial, sans-serif;
+  background:#000;
+  color:#fff;
+  margin:0;
+  text-align:center;
+}
+header{
+  background:#111;
+  padding:18px;
+  font-size:26px;
+  font-weight:bold;
+}
+input,button{
+  width:92%;
+  max-width:420px;
+  padding:18px;
+  margin:12px auto;
+  font-size:24px;
+  border-radius:12px;
+  border:none;
+}
+.first-btn{background:#43A047;color:#fff}
+.event-btn{background:#1E88E5;color:#fff}
+.manual-btn{background:#F9A825;color:#000}
+.back-btn{background:#555;color:#fff}
+.confirm{
+  font-size:36px;
+  color:#4CAF50;
+  margin-top:80px;
+}
+.hidden{display:none}
+#scanner{width:100%;max-width:420px;margin:auto}
+</style>
+</head>
+
+<body>
+
+<header id="header">🔐 工作人員登入</header>
+
+<!-- ✅ 工作人員 -->
+<div id="staffPage" class="page">
+  <input id="staffInput" placeholder="輸入工作人員名稱">
+  <button class="event-btn" onclick="saveStaff()">開始</button>
+</div>
+
+<!-- ✅ 項目 -->
+<div id="eventPage" class="page hidden">
+  <button class="first-btn" onclick="selectEvent('首次報到')">① 首次報到</button>
+  <button class="event-btn" onclick="selectEvent('項目一')">② 項目一</button>
+  <button class="event-btn" onclick="selectEvent('項目二')">③ 項目二</button>
+  <button class="event-btn" onclick="selectEvent('項目三')">④ 項目三</button>
+  <button class="event-btn" onclick="selectEvent('項目四')">⑤ 項目四</button>
+  <button class="event-btn" onclick="selectEvent('項目五')">⑥ 項目五</button>
+  <button class="event-btn" onclick="selectEvent('項目六')">⑦ 項目六</button>
+</div>
+
+<!-- ✅ 掃描 -->
+<div id="scanPage" class="page hidden">
+  <div id="scanner"></div>
+  <button class="manual-btn" onclick="openManual()">✍️ 手動輸入</button>
+  <button class="back-btn" onclick="backToEvent()">⬅ 返回</button>
+</div>
+
+<!-- ✅ 手動輸入 -->
+<div id="manualPage" class="page hidden">
+  <input id="teamNo" placeholder="隊號（01–27）" maxlength="2">
+  <input id="memberNo" placeholder="隊員（A–I）" maxlength="1">
+  <button class="event-btn" onclick="submitManual()">提交</button>
+  <button class="back-btn" onclick="backToScan()">⬅ 返回相機</button>
+</div>
+
+<!-- ✅ 確認 -->
+<div id="confirmPage" class="page hidden">
+  <div class="confirm">✅ 已提交</div>
+</div>
+
+<script src="https://unpkg.com/html5-qrcode"></script>
+<script>
+// ===== Google Form 設定 =====
+const FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSfb9TdBGH6aGtpX1chUArd-61hNR2QSOjyZ55_MJkReu4BZCQ/formResponse";
+const ENTRY_MEMBER = "entry.440560781";
+const ENTRY_EVENT  = "entry.722246826";
+const ENTRY_STAFF  = "entry.1290533017";
+const ENTRY_DEVICE = "entry.389796138";
+// ============================
+
+let staff="", eventName="", qr=null;
+let device = "DEV-" + Math.random().toString(36).substr(2,6).toUpperCase();
+
+function show(id){
+ document.querySelectorAll(".page")
+   .forEach(p=>p.classList.add("hidden"));
+ document.getElementById(id)
+   .classList.remove("hidden");
+}
+
+// ✅ 震動（安全）
+function vibrate(){
+ if(navigator.vibrate){
+   navigator.vibrate(100);
+ }
+}
+
+function saveStaff(){
+ staff = staffInput.value.trim();
+ if(!staff) return alert("請輸入名稱");
+ header.innerText="📋 選擇項目";
+ show("eventPage");
+}
+
+function selectEvent(e){
+ eventName = e;
+ header.innerText="📷 掃描 QR";
+ show("scanPage");
+
+ setTimeout(()=>{
+   qr = new Html5Qrcode("scanner");
+   qr.start(
+     {facingMode:"environment"},
+     {fps:10, qrbox:250},
+     id => {
+       submit(id);
+       vibrate();
+     }
+   );
+ },200);
+}
+
+function submit(memberId){
+ const d = new FormData();
+ d.append(ENTRY_MEMBER, memberId);
+ d.append(ENTRY_EVENT, eventName);
+ d.append(ENTRY_STAFF, staff);
+ d.append(ENTRY_DEVICE, device);
+ fetch(FORM_URL,{method:"POST",mode:"no-cors",body:d});
+}
+
+function openManual(){
+ if(qr){ qr.stop(); }
+ header.innerText="✍️ 手動輸入";
+ show("manualPage");
+}
+
+function submitManual(){
+ let team = teamNo.value.padStart(2,"0");
+ let mem  = memberNo.value.toUpperCase();
+
+ if(team < "01" || team > "27") return alert("隊號必須 01–27");
+ if(!/^[A-I]$/.test(mem)) return alert("隊員必須 A–I");
+
+ submit(team + mem);
+ vibrate();
+
+ show("confirmPage");
+ setTimeout(()=>show("manualPage"),500);
+}
+
+function backToScan(){
+ header.innerText="📷 掃描 QR";
+ show("scanPage");
+}
+
+function backToEvent(){
+ if(qr){ qr.stop(); }
+ header.innerText="📋 選擇項目";
+ show("eventPage");
+}
+</script>
+
+</body>
+</html>
